@@ -1,0 +1,31 @@
+/* Authoritative sRGB values. See docs/visual-direction.md for pairing rules. */
+:root,[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#10171d;--surface:#182229;--surface-raised:#222f37;
+  --ink:#eff2ef;--muted:#adbac0;--line:#455a65;
+  --accent:#8dd9d0;--warning:#f2bf65;--alarm:#f17f79;--success:#9bcfa8;
+  --font-sans:Inter,"Segoe UI",Arial,sans-serif;--font-mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-6:24px;--space-8:32px;
+  --radius-sm:6px;--radius-panel:10px;--motion-fast:140ms;--motion-settle:280ms;
+  --ease-settle:cubic-bezier(.22,.68,0,1);--shadow-color:#02070b;--figure-halo:#293c43;
+  --metal-base:#26353e;--metal-top:#52636b;--metal-0:#1b2931;--metal-1:#293a44;--metal-2:#354953;--metal-3:#415660;
+  --metal-edge:#bec9cc;--metal-detail:#9aaeb6;--metal-seam:#1b2b34;--metal-faint:#3c505a;
+  --recess:#081217;--dial-bg:#e4e7de;--dial-ink:#18292f;--dial-muted:#546568;
+  --display-bg:#091719;--display-ink:#b9ead7;
+  --rubber-top:#233138;--rubber-0:#0b1419;--rubber-1:#152128;--rubber-2:#1b2b32;--rubber-3:#233840;--rubber-detail:#81949a;
+  --pointer:#e8f2df;--signal-ink:#111b20;
+}
+[data-theme="light"]{
+  color-scheme:light;
+  --bg:#edece6;--surface:#faf9f4;--surface-raised:#e5e7e2;
+  --ink:#182b34;--muted:#50606a;--line:#9ba8a8;
+  --accent:#126a68;--warning:#805500;--alarm:#ab332e;--success:#2b663e;
+  --shadow-color:#243a41;--figure-halo:#e1e5de;
+  --metal-base:#b6c0bd;--metal-top:#c9d0ca;--metal-0:#6d7e80;--metal-1:#879797;--metal-2:#9aa9a6;--metal-3:#adbbb5;
+  --metal-edge:#394f56;--metal-detail:#4d646c;--metal-seam:#768b8c;--metal-faint:#abbab5;
+  --recess:#263d43;--dial-bg:#f2f0e5;--dial-ink:#152d35;--dial-muted:#566a6c;
+  --display-bg:#183c3f;--display-ink:#e2f2df;
+  --rubber-top:#2d4147;--rubber-0:#172b32;--rubber-1:#1e3339;--rubber-2:#263c42;--rubber-3:#30474c;--rubber-detail:#8fa3a1;
+  --pointer:#e8f2df;--signal-ink:#fff9e9;
+}
+@media(prefers-reduced-motion:reduce){:root{--motion-fast:0ms;--motion-settle:0ms}}

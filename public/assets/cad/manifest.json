@@ -1,0 +1,81 @@
+{
+  "generator": "build123d 0.13.0",
+  "units": "mm",
+  "sceneScale": 0.005,
+  "parts": [
+    {
+      "id": "bezel",
+      "file": "bezel.stl",
+      "triangles": 1712,
+      "bytes": 85684,
+      "volumeMm3": 23518.012,
+      "boundsMm": [
+        -48.0,
+        -48.0,
+        0.0,
+        48.0,
+        48.0,
+        8.0
+      ],
+      "meshSha256": "b50f11344a66f2f6c148f27f92298f9406ba50e3957363ac1973e54500c92ef0",
+      "joint": {
+        "type": "rigid",
+        "axis": "+Z",
+        "range": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "knob",
+      "file": "knob.stl",
+      "triangles": 1160,
+      "bytes": 58084,
+      "volumeMm3": 6280.739,
+      "boundsMm": [
+        -11.8,
+        -11.8,
+        -4.0,
+        11.8,
+        11.8,
+        17.0
+      ],
+      "meshSha256": "a4e0604404f1149df83d9619d9facedac6c76301bc6ab3b1e09a8ebc8097854a",
+      "joint": {
+        "type": "revolute",
+        "axis": "+Z",
+        "range": [
+          -126,
+          126
+        ],
+        "unit": "degree"
+      }
+    },
+    {
+      "id": "ack-button",
+      "file": "ack-button.stl",
+      "triangles": 836,
+      "bytes": 41884,
+      "volumeMm3": 5004.353,
+      "boundsMm": [
+        -14.0,
+        -14.0,
+        0.0,
+        14.0,
+        14.0,
+        12.5
+      ],
+      "meshSha256": "5800a80fc1cb50c130dccb27c36f5bb26504f7b55b715b2595a11d3ebfbc67a7",
+      "joint": {
+        "type": "linear",
+        "axis": "+Z",
+        "range": [
+          -5,
+          0
+        ],
+        "unit": "mm"
+      }
+    }
+  ]
+}
