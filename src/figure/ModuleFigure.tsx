@@ -15,7 +15,7 @@ const ZONE_NAMES = { power: 'Мощность и режим', systems: 'Техн
 
 /** A display of the shared model; no independent simulation or idle demonstration. */
 export function ModuleFigure({ snapshot, profile, zone, onCommand, onAcknowledge }: ModuleFigureProps) {
-  const id = useId().replace(/:/g, ''), geometry = moduleGeometry(profile), reading = figureReading(snapshot, zone);
+  const id = useId().replace(/:/g, ''), geometry = moduleGeometry(profile, zone), reading = figureReading(snapshot, zone);
   const canAcknowledge = snapshot.signal.kind !== 'normal' && !snapshot.signal.acknowledged;
   const host = useRef<HTMLElement>(null), needle = useRef<SVGPathElement>(null), pointer = useRef<SVGPathElement>(null);
   const cap = useRef<SVGGElement>(null), spring = useRef<SVGPathElement>(null), springBack = useRef<SVGPathElement>(null);
@@ -93,7 +93,7 @@ export function ModuleFigure({ snapshot, profile, zone, onCommand, onAcknowledge
           <g ref={cap} aria-hidden="true" dangerouslySetInnerHTML={{ __html: geometry.buttonMarkup }} />
         </g>
         <g aria-hidden="true" className="module-guards" dangerouslySetInnerHTML={{ __html: geometry.frontMarkup }} />
-        <text aria-hidden="true" x={signalPoint[0]} y={signalPoint[1] + 4} className="module-signal-mark" textAnchor="middle">{snapshot.signal.kind === 'normal' ? '•' : '!'}</text>
+        <text aria-hidden="true" x={signalPoint[0]} y={signalPoint[1] + 4} className="module-signal-mark" textAnchor="middle">{snapshot.signal.kind === 'alarm' ? '⬣' : snapshot.signal.kind === 'warning' ? '▲' : '•'}</text>
       </svg>
       <div className="module-figure-foot"><span>Рукоятка: щелчок / ← → · кнопка: Enter</span><output>{reading.label} <b>{reading.value}</b><small> / 100</small></output></div>
       <figcaption><span className="module-status"><span aria-hidden="true">{signalSymbol}</span> {snapshot.signal.label}{snapshot.signal.acknowledged ? ' · Подтверждён' : ''}</span><span>Стрелка — показание · рукоятка — команда {snapshot.command} · лампа — сигнал</span></figcaption>

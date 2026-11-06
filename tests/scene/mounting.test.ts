@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { Box3, Mesh, MeshStandardMaterial, OrthographicCamera, Raycaster, Vector2, Vector3 } from 'three';
+import { Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial, OrthographicCamera, Raycaster, Vector2, Vector3 } from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { buildRoom } from '../../src/scene/buildRoom';
 import { observeWebGLContext } from '../../src/scene/context';
 import { createSession, deriveSnapshot } from '../../src/sim/model';
 import { motionPose } from '../../src/scene/config';
 import { actionFromIntersections } from '../../src/scene/picking';
-import { frameConsole } from '../../src/scene/camera';
+import { frameConsole, frameOverview } from '../../src/scene/camera';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -83,6 +83,68 @@ describe('physical mounting', () => {
   });
 });
 
+it('builds a long instrument wall and separate workstations for VVER, but a display wall for SMR', () => {
+  vi.spyOn(STLLoader.prototype, 'load').mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  const vver = buildRoom('vver', '/');
+  const smr = buildRoom('smr', '/');
+  const count = (room: typeof vver, name: string) => {
+    let total = 0;
+    room.root.traverse(object => { if (object.name === name) total++; });
+    return total;
+  };
+  try {
+    expect(count(vver, 'wall-instrument-bay')).toBeGreaterThanOrEqual(4);
+    expect(count(vver, 'wall-digital-screen')).toBe(0);
+    expect(count(vver, 'operator-workstation')).toBeGreaterThanOrEqual(2);
+    expect(count(smr, 'wall-digital-screen')).toBeGreaterThanOrEqual(5);
+    expect(count(smr, 'wall-instrument-bay')).toBe(0);
+    expect(count(smr, 'operator-workstation')).toBeGreaterThanOrEqual(2);
+  } finally { vver.dispose(); smr.dispose(); }
+});
+
+it('lights each named system lamp from its own system status', () => {
+  vi.spyOn(STLLoader.prototype, 'load').mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect() {}, fillText() {} } as unknown as CanvasRenderingContext2D);
+  const room = buildRoom('vver', '/');
+  try {
+    const base = deriveSnapshot(createSession());
+    const snapshot = {
+      ...base,
+      systems: base.systems.map(system => ({
+        ...system,
+        status: system.id === 'flow' ? 'warning' as const : system.id === 'indicators' ? 'alarm' as const : 'normal' as const,
+      })),
+    };
+    room.update(snapshot, 'power', true);
+    const colors = new Map<string, string>();
+    room.root.traverse(object => {
+      if (object.name !== 'system-status-lamp') return;
+      colors.set(object.userData.systemId, (object as Mesh).material instanceof MeshStandardMaterial
+        ? ((object as Mesh).material as MeshStandardMaterial).color.getStyle() : '');
+    });
+    expect([...colors.keys()].sort()).toEqual(['flow', 'indicators', 'power']);
+    expect(colors.get('power')).not.toBe(colors.get('flow'));
+    expect(colors.get('flow')).not.toBe(colors.get('indicators'));
+  } finally { room.dispose(); }
+});
+
+it.each(['vver', 'smr'] as const)('selects all three zones from the %s rear wall', profile => {
+  vi.spyOn(STLLoader.prototype, 'load').mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  const room = buildRoom(profile, '/');
+  try {
+    const zones = new Set<string>();
+    room.root.traverse(object => {
+      if (object.name !== (profile === 'vver' ? 'wall-instrument-bay' : 'wall-digital-screen')) return;
+      const target = profile === 'vver' ? object.children.find(child => child instanceof Mesh)! : object;
+      const action = actionFromIntersections([{ object: target }]);
+      if (action?.kind === 'zone') zones.add(action.zone);
+    });
+    expect([...zones].sort()).toEqual(['alarms', 'power', 'systems']);
+  } finally { room.dispose(); }
+});
+
 it('seeds persisted controls before the first frame and animates later changes', () => {
   vi.spyOn(STLLoader.prototype, 'load').mockImplementation(() => {});
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect() {}, fillText() {} } as unknown as CanvasRenderingContext2D);
@@ -149,6 +211,70 @@ it.each(['vver', 'smr'] as const)('keeps the entire %s console and chair inside 
       expect((minY + maxY) / 2).toBeCloseTo(0, 1);
     }
   } finally { room.dispose(); }
+});
+
+it('keeps the SMR display wall, including its top rail, inside the ordinary overview', () => {
+  vi.spyOn(STLLoader.prototype, 'load').mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  const room = buildRoom('smr', '/');
+  try {
+    const aspect = 1.65;
+    const camera = new OrthographicCamera(-4, 4, 3, -3, .1, 50);
+    camera.position.set(7.2, 5.9, 9); camera.lookAt(0, 1.05, .35);
+    frameOverview(camera, room.subjects, aspect);
+    room.root.updateMatrixWorld(true);
+    const wall = room.root.getObjectByName('digital-display-wall')!;
+    let top = -Infinity;
+    wall.traverse(object => {
+      if (!(object instanceof Mesh)) return;
+      const positions = object.geometry.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const point = new Vector3().fromBufferAttribute(positions, i).applyMatrix4(object.matrixWorld).project(camera);
+        top = Math.max(top, point.y);
+      }
+    });
+    expect(top).toBeLessThan(.9);
+  } finally { room.dispose(); }
+});
+
+it.each(['vver', 'smr'] as const)('fills the ordinary %s overview without cutting off the physical room', profile => {
+  vi.spyOn(STLLoader.prototype, 'load').mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  const room = buildRoom(profile, '/');
+  try {
+    const camera = new OrthographicCamera(-4, 4, 3, -3, .1, 50);
+    camera.position.set(7.2, 5.9, 9); camera.lookAt(0, 1.05, .35);
+    frameOverview(camera, room.subjects, 1.65);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const subject of room.subjects) subject.traverse(object => {
+      if (!(object instanceof Mesh)) return;
+      const positions = object.geometry.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const point = new Vector3().fromBufferAttribute(positions, i).applyMatrix4(object.matrixWorld).project(camera);
+        minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
+        minY = Math.min(minY, point.y); maxY = Math.max(maxY, point.y);
+      }
+    });
+    expect(Math.max(Math.abs(minX), Math.abs(maxX), Math.abs(minY), Math.abs(maxY))).toBeLessThan(.9);
+    expect(Math.max(maxX - minX, maxY - minY)).toBeGreaterThan(1.6);
+  } finally { room.dispose(); }
+});
+
+it('focuses a selected physical bay and allows a bounded zoomed pan', () => {
+  const left = new Group(); left.position.x = -3;
+  left.add(new Mesh(new BoxGeometry(1, 1, 1)));
+  const right = new Group(); right.position.x = 3;
+  right.add(new Mesh(new BoxGeometry(1, 1, 1)));
+  const camera = new OrthographicCamera(-4, 4, 3, -3, .1, 50);
+  camera.position.set(7, 5, 8); camera.lookAt(0, 0, 0);
+  frameConsole(camera, [left, right], 1.6);
+  const fullWidth = camera.right - camera.left;
+  frameConsole(camera, [left, right], 1.6, { focus: right, zoom: 2 });
+  const focusedWidth = camera.right - camera.left;
+  expect(focusedWidth).toBeCloseTo(fullWidth / 2);
+  expect(right.getWorldPosition(new Vector3()).project(camera).x).toBeCloseTo(0, 1);
+  frameConsole(camera, [left, right], 1.6, { focus: right, zoom: 2, panX: .5 });
+  expect(right.getWorldPosition(new Vector3()).project(camera).x).toBeLessThan(-.8);
 });
 
 it.each(['vver', 'smr'] as const)('keeps loaded %s CAD centered through asset completion and desktop resize', profile => {

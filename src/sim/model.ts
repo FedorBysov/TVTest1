@@ -1,3 +1,8 @@
+import { compactTrainingEvidence } from './assessment';
+import { STAGES } from './stages';
+
+export { STAGES } from './stages';
+
 export type Profile = 'vver' | 'smr';
 export type ZoneId = 'power' | 'systems' | 'alarms';
 export type ScenarioId = 'normal' | 'flow' | 'split';
@@ -5,12 +10,8 @@ export type StageId = 0 | 1 | 2 | 3 | 4;
 export type RoleId = 'observer' | 'operator' | 'instructor';
 export type SessionMode = 'solo' | 'group';
 export type SignalKind = 'normal' | 'warning' | 'alarm';
+export type SystemPhase = 'steady' | 'transition' | 'degraded' | 'discrepant';
 export type Command = 0 | 25 | 50 | 75 | 100;
-
-export const STAGES = [
-  'Подготовка к пуску', 'Пуск', 'Выход на рабочую мощность',
-  'Изменение мощности', 'Плановый останов',
-] as const;
 
 type DeviationId = Exclude<ScenarioId, 'normal'>;
 type DeviationStatus = 'idle' | 'active' | 'resolved';
@@ -21,6 +22,7 @@ export type SessionAction =
   | { type: 'SCENARIO'; scenario: ScenarioId }
   | { type: 'TICK'; seconds?: number }
   | { type: 'COMMAND'; value: number }
+  | { type: 'OBSERVE'; zone: ZoneId }
   | { type: 'TRIGGER'; scenario?: DeviationId }
   | { type: 'ACK' }
   | { type: 'RESOLVE' }
@@ -55,12 +57,14 @@ export interface DisplaySnapshot {
     id: 'power' | 'flow' | 'indicators';
     label: string;
     status: SignalKind;
+    phase: SystemPhase;
+    detail: string;
   }>[];
 }
-
 export interface JournalEvent {
   readonly id: number;
   readonly type: SessionAction['type'];
+  readonly zone?: ZoneId;
   readonly time: number;
   readonly actor: RoleId | 'student' | 'model';
   readonly message: string;
@@ -73,6 +77,7 @@ export interface SessionState {
   readonly scenario: ScenarioId;
   readonly time: number;
   readonly paused: boolean;
+  readonly stageTimeAdvanced: boolean;
   readonly command: Command;
   readonly response: number;
   readonly deviation: DeviationStatus;
@@ -83,6 +88,7 @@ export interface SessionState {
   readonly actor: RoleId;
   readonly assignments: Readonly<Partial<Record<StageId, RoleId>>>;
   readonly journal: readonly JournalEvent[];
+  readonly trainingEvidence: readonly JournalEvent[];
 }
 
 // These are toy display curves and names for a fictional panel. The profile
@@ -103,9 +109,10 @@ const PROFILES = {
 const COMMANDS = [25, 50, 75, 50, 0] as const;
 const DETENTS = [0, 25, 50, 75, 100] as const;
 
-// The live clock updates on every tick. Keep snapshots only when it crosses a
-// ten-second mark. The saved session holds up to 500 events, including up to 60
-// clock samples. Once either limit is reached, older entries are removed.
+// The live clock updates on every tick. The first advancing tick of each stage
+// gives the lesson an immediate observation point; later samples are saved at
+// ten-second marks. The journal keeps at most 500 events and 60 clock samples.
+// Compact training evidence retains assessed milestones after journal eviction.
 const SAMPLE_SECONDS = 10;
 const CLOCK_SAMPLE_LIMIT = 60;
 const JOURNAL_LIMIT = 500;
@@ -117,6 +124,10 @@ const DEVIATIONS = {
 
 const ROLES: Record<RoleId, string> = {
   observer: 'Наблюдатель параметров', operator: 'Оператор учебной панели', instructor: 'Инструктор',
+};
+
+const ZONE_LABELS: Record<ZoneId, string> = {
+  power: 'мощности и режима', systems: 'технологических систем', alarms: 'сигнализации',
 };
 
 const STAGE_HINTS = [
@@ -132,10 +143,10 @@ const reading = (value: number) => Math.round(clamp(value));
 
 export function createSession(profile: Profile = 'vver'): SessionState {
   return {
-    profile, stage: 0, scenario: 'normal', time: 0, paused: true,
+    profile, stage: 0, scenario: 'normal', time: 0, paused: true, stageTimeAdvanced: false,
     command: COMMANDS[0], response: PROFILES[profile].levels[0],
     deviation: 'idle', acknowledged: false, hints: 0, hint: null,
-    mode: 'solo', actor: 'operator', assignments: {}, journal: Object.freeze([]),
+    mode: 'solo', actor: 'operator', assignments: {}, journal: Object.freeze([]), trainingEvidence: Object.freeze([]),
   };
 }
 
@@ -154,10 +165,17 @@ export function deriveSnapshot(state: SessionState): DisplaySnapshot {
     kind: 'normal', label: state.deviation === 'resolved' ? 'Причина устранена' : 'Норма',
     cause: null, acknowledged: false,
   };
+  const powerTransition = Math.abs(command - power) > 12;
   const systems: DisplaySnapshot['systems'] = Object.freeze([
-    Object.freeze({ id: 'power', label: curve.systems[0], status: 'normal' }),
-    Object.freeze({ id: 'flow', label: curve.systems[1], status: lowFlow ? 'warning' : 'normal' }),
-    Object.freeze({ id: 'indicators', label: curve.systems[2], status: split ? 'alarm' : 'normal' }),
+    Object.freeze({ id: 'power', label: curve.systems[0], status: 'normal',
+      phase: powerTransition ? 'transition' : 'steady',
+      detail: powerTransition ? 'Показание следует за учебной командой' : 'Показание согласовано с учебной целью' }),
+    Object.freeze({ id: 'flow', label: curve.systems[1], status: lowFlow ? 'warning' : 'normal',
+      phase: lowFlow ? 'degraded' : 'steady',
+      detail: lowFlow ? 'Расход условного контура снижен' : 'Расход условного контура в норме' }),
+    Object.freeze({ id: 'indicators', label: curve.systems[2], status: split ? 'alarm' : 'normal',
+      phase: split ? 'discrepant' : 'steady',
+      detail: split ? 'Учебные индикаторы расходятся' : 'Учебные индикаторы согласованы' }),
   ]);
   return Object.freeze({
     profile, stage, stageLabel: STAGES[stage], scenario, time, command,
@@ -166,11 +184,11 @@ export function deriveSnapshot(state: SessionState): DisplaySnapshot {
   });
 }
 
-function record(state: SessionState, type: SessionAction['type'], message: string, previous = state): SessionState {
+function record(state: SessionState, type: SessionAction['type'], message: string, previous = state, zone?: ZoneId): SessionState {
   const event: JournalEvent = Object.freeze({
     id: (state.journal.at(-1)?.id ?? 0) + 1, type, time: state.time,
     actor: type === 'TICK' ? 'model' : previous.mode === 'group' ? previous.actor : 'student',
-    message, snapshot: deriveSnapshot(state),
+    message, ...(zone === undefined ? {} : { zone }), snapshot: deriveSnapshot(state),
   });
   const journal = [event];
   let clockSamples = type === 'TICK' ? 1 : 0;
@@ -182,7 +200,8 @@ function record(state: SessionState, type: SessionAction['type'], message: strin
     }
     journal.push(entry);
   }
-  return { ...state, journal: Object.freeze(journal.reverse()) };
+  return { ...state, journal: Object.freeze(journal.reverse()),
+    trainingEvidence: compactTrainingEvidence([...state.trainingEvidence, event]) };
 }
 
 function hintFor(state: SessionState): string {
@@ -221,7 +240,7 @@ export function reduceSession(state: SessionState, action: SessionAction): Sessi
       return createSession(state.profile);
     case 'STAGE':
       return action.stage === state.stage ? state : record(
-        { ...state, stage: action.stage, command: COMMANDS[action.stage], hint: null }, action.type,
+        { ...state, stage: action.stage, command: COMMANDS[action.stage], stageTimeAdvanced: false, hint: null }, action.type,
         `Выбран этап «${STAGES[action.stage]}».`,
       );
     case 'SCENARIO':
@@ -236,9 +255,10 @@ export function reduceSession(state: SessionState, action: SessionAction): Sessi
       const curve = PROFILES[state.profile];
       const target = clamp(curve.levels[state.stage] + (state.command - COMMANDS[state.stage]) * curve.commandGain);
       const response = target + (state.response - target) * Math.exp(-seconds / curve.responseSeconds);
-      const next = { ...state, time, response };
+      const firstStageAdvance = !state.stageTimeAdvanced;
+      const next = { ...state, time, response, stageTimeAdvanced: true };
       const crossedSampleMark = Math.floor(time / SAMPLE_SECONDS) > Math.floor(state.time / SAMPLE_SECONDS);
-      return crossedSampleMark ? record(next, action.type, 'Обновлены условные показания.') : next;
+      return firstStageAdvance || crossedSampleMark ? record(next, action.type, 'Обновлены условные показания.') : next;
     }
     case 'COMMAND': {
       if (!Number.isFinite(action.value)) return state;
@@ -247,6 +267,10 @@ export function reduceSession(state: SessionState, action: SessionAction): Sessi
         { ...state, command }, action.type, `Учебная рукоятка переведена на отметку ${command}.`,
       );
     }
+    case 'OBSERVE':
+      return !Object.hasOwn(ZONE_LABELS, action.zone) ? state : record(
+        state, action.type, `Осмотрена зона ${ZONE_LABELS[action.zone]}.`, state, action.zone,
+      );
     case 'TRIGGER': {
       const scenario = action.scenario ?? state.scenario;
       if (scenario === 'normal' || state.deviation === 'active') return state;

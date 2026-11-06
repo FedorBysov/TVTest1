@@ -32,6 +32,19 @@ describe('physical module figure', () => {
     expect(needlePath(150)).toBe(needlePath(100));
     expect(needlePath(0)).not.toBe(needlePath(100));
   });
+  it('gives the three selected zones different mounted assemblies and signal marks', () => {
+    const power = moduleGeometry('vver', 'power');
+    const systems = moduleGeometry('vver', 'systems');
+    const alarms = moduleGeometry('vver', 'alarms');
+    expect(power.staticMarkup).toContain('data-part="zone-power-scale"');
+    expect(systems.staticMarkup).toContain('data-part="zone-systems-manifold"');
+    expect(alarms.staticMarkup).toContain('data-part="zone-alarms-bank"');
+    expect(new Set([power.staticMarkup, systems.staticMarkup, alarms.staticMarkup]).size).toBe(3);
+    const warning = { ...snapshot(), signal: { ...snapshot().signal, kind: 'warning' as const } };
+    const alarm = { ...snapshot(), signal: { ...snapshot().signal, kind: 'alarm' as const } };
+    expect(renderToStaticMarkup(<ModuleFigure snapshot={warning} profile="vver" zone="alarms" onCommand={() => {}} onAcknowledge={() => {}} />)).toContain('▲</text>');
+    expect(renderToStaticMarkup(<ModuleFigure snapshot={alarm} profile="vver" zone="alarms" onCommand={() => {}} onAcknowledge={() => {}} />)).toContain('⬣</text>');
+  });
   it('renders a labelled interactive object and retains signal after acknowledgement', () => {
     const initial = snapshot();
     const s = { ...initial, signal: { ...initial.signal, kind: 'alarm' as const, label: 'Тревога', cause: 'Учебное отклонение', acknowledged: true } };

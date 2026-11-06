@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { STAGES, type DisplaySnapshot, type Profile, type StageId, type ZoneId } from '../../sim/model'
+import { STAGES, type DisplaySnapshot, type Profile, type SessionAction, type StageId, type ZoneId } from '../../sim/model'
 import { ControlRoom } from '../../scene/ControlRoom'
 import { ZONES } from '../content'
 import { formatTime, Panel, Readings, SectionTitle, SignalBadge, StageStrip } from '../components'
@@ -14,15 +14,22 @@ interface OverviewProps {
   onAcknowledge: () => void
   onStage: (stage: StageId) => void
   onOpenScenarios: () => void
+  canDispatch: (action: SessionAction) => boolean
 }
 
-export function OverviewPage({ snapshot, profile, selectedZone, onZone, onSelectExpandedZone, onCommand, onAcknowledge, onStage, onOpenScenarios }: OverviewProps) {
+export function OverviewPage({ snapshot, profile, selectedZone, onZone, onSelectExpandedZone, onCommand, onAcknowledge, onStage, onOpenScenarios, canDispatch }: OverviewProps) {
   const [expanded, setExpanded] = useState(false)
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const expandButtonRef = useRef<HTMLButtonElement>(null)
+  const viewOnly = !canDispatch({ type: 'STAGE', stage: snapshot.stage })
+  const closeWorkbench = () => {
+    setExpanded(false)
+    window.requestAnimationFrame(() => expandButtonRef.current?.focus())
+  }
   useEffect(() => {
     const dialog = dialogRef.current
     if (!expanded || !dialog) return
-    const onCancel = (event: Event) => { event.preventDefault(); setExpanded(false) }
+    const onCancel = (event: Event) => { event.preventDefault(); closeWorkbench() }
     dialog.addEventListener('cancel', onCancel)
     dialog.showModal()
     return () => { dialog.removeEventListener('cancel', onCancel); if (dialog.open) dialog.close() }
@@ -36,8 +43,8 @@ export function OverviewPage({ snapshot, profile, selectedZone, onZone, onSelect
 
     <div className="overview-grid">
       <Panel className="scene-panel">
-        <div className="panel-heading"><span className="panel-index">FIG 01 / ОБЩИЙ ВИД</span><div className="scene-heading-actions"><span className="panel-hint">Секции и органы управления интерактивны</span><button className="scene-expand-button" type="button" onClick={() => setExpanded(true)}>⤢ Развернуть стол</button></div></div>
-        <div className="scene-viewport">
+        <div className="panel-heading"><span className="panel-index">FIG 01 / ОБЩИЙ ВИД</span><div className="scene-heading-actions"><span className="panel-hint">Секции и органы управления интерактивны</span><button ref={expandButtonRef} className="scene-expand-button" type="button" onClick={() => setExpanded(true)}>⤢ Развернуть стол</button></div></div>
+        <div className={`scene-viewport${viewOnly ? ' scene-readonly' : ''}`}>
           {!expanded && <ControlRoom snapshot={snapshot} profile={profile} selectedZone={selectedZone} onSelectZone={onZone} onCommand={onCommand} onAcknowledge={onAcknowledge} onStage={onStage} />}
         </div>
         <div className="scene-caption"><span>Вымышленная компоновка {profile === 'vver' ? 'ВВЭР · сегментированная' : 'СМР · модульная'}</span><span>01 — 03 / зоны поста</span></div>
@@ -71,14 +78,14 @@ export function OverviewPage({ snapshot, profile, selectedZone, onZone, onSelect
       <div className="workbench-shell">
         <div className="workbench-header">
           <div><span className="panel-index">FIG 01 / РАСШИРЕННЫЙ ВИД</span><h2>Учебный стол · {profile === 'vver' ? 'ВВЭР' : 'СМР'}</h2></div>
-          <div className="workbench-header-actions"><span className={`workbench-signal workbench-signal-${snapshot.signal.kind}`}>{snapshot.signal.kind === 'alarm' ? '⬣' : snapshot.signal.kind === 'warning' ? '▲' : '●'} {snapshot.signal.label}</span><button className="ghost-button" type="button" onClick={() => setExpanded(false)}>Свернуть ×</button></div>
+          <div className="workbench-header-actions"><span className={`workbench-signal workbench-signal-${snapshot.signal.kind}`}>{snapshot.signal.kind === 'alarm' ? '⬣' : snapshot.signal.kind === 'warning' ? '▲' : '●'} {snapshot.signal.label}</span><button className="ghost-button" type="button" onClick={closeWorkbench}>Свернуть ×</button></div>
         </div>
-        <div className="workbench-viewport"><ControlRoom snapshot={snapshot} profile={profile} selectedZone={selectedZone} onSelectZone={onSelectExpandedZone} onCommand={onCommand} onAcknowledge={onAcknowledge} onStage={onStage} expanded /></div>
+        <div className={`workbench-viewport${viewOnly ? ' scene-readonly' : ''}`}><ControlRoom snapshot={snapshot} profile={profile} selectedZone={selectedZone} onSelectZone={onSelectExpandedZone} onCommand={onCommand} onAcknowledge={onAcknowledge} onStage={onStage} expanded />{viewOnly && <span className="workbench-readonly-note">Роль просмотра · управление на 3D-столе недоступно</span>}</div>
         <div className="workbench-controls">
           <div className="workbench-control-group workbench-zone-group"><span className="workbench-label">ЗОНА ЩИТА</span><div>{(Object.keys(ZONES) as ZoneId[]).map((zone) => <button key={zone} type="button" className={zone === selectedZone ? 'is-active' : ''} aria-pressed={zone === selectedZone} onClick={() => onSelectExpandedZone(zone)}>{ZONES[zone].number} {ZONES[zone].title}</button>)}</div></div>
-          <div className="workbench-control-group workbench-stage-group"><span className="workbench-label">ЭТАП · ПЯТЬ ТУМБЛЕРОВ НА СТОЛЕ</span><div>{STAGES.map((label, index) => <button key={index} type="button" className={index === snapshot.stage ? 'is-active' : ''} aria-label={`Этап ${index + 1}: ${label}`} aria-pressed={index === snapshot.stage} onClick={() => onStage(index as StageId)}>{String(index + 1).padStart(2, '0')}</button>)}</div></div>
-          <div className="workbench-control-group workbench-command-group"><span className="workbench-label">УЧЕБНАЯ КОМАНДА · РУКОЯТКА</span><div>{[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" className={snapshot.command === value ? 'is-active' : ''} aria-pressed={snapshot.command === value} onClick={() => onCommand(value)}>{value}</button>)}</div></div>
-          <div className="workbench-control-group workbench-action-group"><span className="workbench-label">СИГНАЛ · {formatTime(snapshot.time)}</span><button className="primary-button" type="button" disabled={snapshot.signal.kind === 'normal' || snapshot.signal.acknowledged} onClick={onAcknowledge}>Квитировать</button></div>
+          <div className="workbench-control-group workbench-stage-group"><span className="workbench-label">ЭТАП · ПЯТЬ ТУМБЛЕРОВ НА СТОЛЕ</span><div>{STAGES.map((label, index) => <button key={index} type="button" className={index === snapshot.stage ? 'is-active' : ''} aria-label={`Этап ${index + 1}: ${label}`} aria-pressed={index === snapshot.stage} disabled={!canDispatch({ type: 'STAGE', stage: index as StageId })} onClick={() => onStage(index as StageId)}>{String(index + 1).padStart(2, '0')}</button>)}</div></div>
+          <div className="workbench-control-group workbench-command-group"><span className="workbench-label">УЧЕБНАЯ КОМАНДА · РУКОЯТКА</span><div>{[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" className={snapshot.command === value ? 'is-active' : ''} aria-pressed={snapshot.command === value} disabled={!canDispatch({ type: 'COMMAND', value })} onClick={() => onCommand(value)}>{value}</button>)}</div></div>
+          <div className="workbench-control-group workbench-action-group"><span className="workbench-label">СИГНАЛ · {formatTime(snapshot.time)}</span><button className="primary-button" type="button" disabled={!canDispatch({ type: 'ACK' }) || snapshot.signal.kind === 'normal' || snapshot.signal.acknowledged} onClick={onAcknowledge}>Квитировать</button></div>
         </div>
         <div className="workbench-footer"><span>Мышью: рукоятка — шаг +25 (Shift — −25); тумблеры — этап; кнопка — квитирование.</span><button className="text-link" type="button" onClick={() => onZone(selectedZone)}>Открыть прибор выбранной зоны ↗</button><span>Учебный прототип · условные данные</span></div>
       </div>

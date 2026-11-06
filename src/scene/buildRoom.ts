@@ -14,10 +14,11 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
   root.name = 'training-console';
   const subjects: THREE.Object3D[] = [];
   const layout = consoleLayout(profile);
+  const compact = profile === 'smr';
   const materials = {
-    body: new THREE.MeshStandardMaterial({ color: '#414b50', roughness: .78, metalness: .3 }),
-    panel: new THREE.MeshStandardMaterial({ color: '#899392', roughness: .72, metalness: .24 }),
-    desk: new THREE.MeshStandardMaterial({ color: '#7a8685', roughness: .77, metalness: .2 }),
+    body: new THREE.MeshStandardMaterial({ color: compact ? '#34434e' : '#a9b2ae', roughness: .78, metalness: .3 }),
+    panel: new THREE.MeshStandardMaterial({ color: compact ? '#61737c' : '#d1d8d0', roughness: .72, metalness: .24 }),
+    desk: new THREE.MeshStandardMaterial({ color: compact ? '#586a72' : '#b9c2b9', roughness: .77, metalness: .2 }),
     metal: new THREE.MeshStandardMaterial({ color: '#bac3c2', roughness: .42, metalness: .78 }),
     dark: new THREE.MeshStandardMaterial({ color: '#182426', roughness: .76, metalness: .2 }),
     rubber: new THREE.MeshStandardMaterial({ color: '#151c1d', roughness: .94 }),
@@ -29,8 +30,9 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
   const textures: THREE.Texture[] = [];
   const motionBindings: { root: THREE.Group; reading: Reading }[] = [];
   const selections = new Map<ZoneId, THREE.MeshStandardMaterial>();
-  const lamps: { material: THREE.MeshStandardMaterial; zone: ZoneId }[] = [];
+  const lamps: { material: THREE.MeshStandardMaterial; systemId: 'power' | 'flow' | 'indicators' }[] = [];
   const displays: { texture: THREE.CanvasTexture; context: CanvasRenderingContext2D; key: Reading }[] = [];
+  const auxiliaryDisplays: { texture: THREE.CanvasTexture; context: CanvasRenderingContext2D | null; key: Reading; caption: string }[] = [];
   const stageIndicators: { stage: StageId; cap: THREE.Mesh; material: THREE.MeshStandardMaterial; socketMaterial: THREE.MeshStandardMaterial }[] = [];
   const cadInstances: { id: CadId; group: THREE.Group; material: THREE.Material }[] = [];
   let motions: Motion[] = [];
@@ -68,6 +70,31 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
     }
     cadInstances.push({ id, group, material }); return group;
   };
+  const labelPlate = (parent: THREE.Object3D, label: string, x: number, y: number, z: number, width: number, height = .1) => {
+    box(parent, width + .035, height + .025, .018, x, y, z - .013, materials.dark);
+    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 80;
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.fillStyle = compact ? '#172b32' : '#f1f2e9'; context.fillRect(0, 0, 512, 80);
+      context.fillStyle = compact ? '#e1e9e3' : '#1b2829'; context.font = 'bold 38px Arial';
+      context.textAlign = 'center'; context.fillText(label, 256, 53);
+    }
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; textures.push(texture);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
+    face.position.set(x, y, z); parent.add(face);
+  };
+  const liveScreen = (parent: THREE.Object3D, name: string, key: Reading, caption: string,
+    x: number, y: number, z: number, width: number, height: number) => {
+    box(parent, width + .08, height + .09, .09, x, y, z - .035, materials.dark).name = `${name}-frame`;
+    box(parent, width + .1, .025, .11, x, y - height / 2 - .065, z - .04, materials.metal);
+    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 320;
+    const context = canvas.getContext('2d');
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; textures.push(texture);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
+    screen.name = name; screen.position.set(x, y, z + .016); parent.add(screen);
+    auxiliaryDisplays.push({ context, texture, key, caption });
+    return screen;
+  };
   const gauge = (parent: THREE.Group, x: number, y: number, reading: Reading) => {
     const instrument = new THREE.Group(); instrument.position.set(x, y, .117); parent.add(instrument);
     box(instrument, .51, .51, .055, 0, 0, -.015, materials.dark);
@@ -98,6 +125,73 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
   box(root, layout.width - .1, .13, .21, 0, .1, -.73, materials.dark);
   box(root, layout.width - .3, .09, .11, 0, .79, -.72, materials.metal);
 
+  // A rear instrument wall makes the physical room legible at a glance. Its
+  // upper tier stays behind the interactive desks and never masks their hits.
+  const wall = new THREE.Group(); wall.name = compact ? 'digital-display-wall' : 'hybrid-instrument-wall';
+  root.add(wall); subjects.push(wall);
+  box(wall, layout.width - .16, 3.96, .28, 0, 2.0, -1.14, materials.body);
+  box(wall, layout.width - .06, .075, .33, 0, 3.99, -1.14, materials.metal);
+  box(wall, layout.width - .04, .16, .39, 0, .12, -1.14, materials.dark);
+  for (const x of [-layout.width / 2 + .23, layout.width / 2 - .23]) {
+    box(wall, .14, .25, .45, x, .14, -1.14, materials.metal).name = 'wall-foot';
+  }
+  if (compact) {
+    const keys: Reading[] = ['power', 'temperature', 'pressure', 'flow', 'indicatorB'];
+    for (let i = 0; i < 5; i++) {
+      const bay = new THREE.Group(); bay.position.set((i - 2) * 1.14, 3.29, -1.14); wall.add(bay);
+      bay.userData.zone = i < 2 ? 'power' : i < 4 ? 'systems' : 'alarms';
+      box(bay, 1.1, 1.16, .045, 0, .03, .17, materials.dark);
+      liveScreen(bay, 'wall-digital-screen', keys[i], `МОДУЛЬ ${String(i + 1).padStart(2, '0')}`,
+        0, .13, .235, 1.0, .76);
+      labelPlate(bay, `М${i + 1} · ${['МОЩН.', 'ТЕМП.', 'ДАВЛ.', 'РАСХОД', 'СРАВН.'][i]}`, 0, -.42, .25, .94, .11);
+      for (const sx of [-.48, .48]) screw(bay, sx, -.52, .25);
+    }
+    for (let i = 0; i < 4; i++) box(wall, .013, 1.31, .02, (i - 1.5) * 1.14, 3.28, -.94, materials.metal);
+  } else {
+    for (let i = 0; i < 7; i++) {
+      const bay = new THREE.Group(); bay.name = 'wall-instrument-bay';
+      bay.position.set((i - 3) * 1.26, 3.29, -1.14); wall.add(bay);
+      bay.userData.zone = (['power', 'systems', 'alarms'] as const)[i % 3];
+      box(bay, 1.2, 1.17, .055, 0, .02, .17, materials.panel);
+      labelPlate(bay, `СЕКЦИЯ ${String(i + 1).padStart(2, '0')}`, 0, .47, .22, 1.05, .11);
+      for (const sx of [-.53, .53]) for (const sy of [-.52, .52]) screw(bay, sx, sy, .23);
+      if (i % 3 === 0) {
+        for (const sx of [-.31, .31]) {
+          round(bay, .17, .018, sx, .08, .225, materials.dark, 32);
+          round(bay, .136, .008, sx, .08, .239, materials.face, 32);
+          for (let t = 0; t < 7; t++) {
+            const angle = -1.2 + t * .4;
+            const tick = box(bay, .007, .026, .003, sx + Math.sin(angle) * .108,
+              .08 + Math.cos(angle) * .108, .246, materials.dark);
+            tick.rotation.z = -angle;
+          }
+          box(bay, .012, .088, .005, sx, .12, .25, materials.dark);
+          round(bay, .016, .008, sx, .08, .254, materials.metal, 12);
+        }
+      } else if (i % 3 === 1) {
+        box(bay, .86, .012, .004, 0, .12, .235, materials.dark);
+        for (const sx of [-.4, 0, .4]) {
+          box(bay, .011, .42, .004, sx, -.085, .235, materials.dark);
+          const systemId = sx < -.1 ? 'power' : sx > .1 ? 'indicators' : 'flow';
+          const lamp = new THREE.MeshStandardMaterial({ color: '#6eac98', emissive: '#6eac98', emissiveIntensity: .2 });
+          const node = round(bay, .038, .014, sx, .12, .252, lamp, 18);
+          node.name = 'wall-mimic-lamp'; node.userData.systemId = systemId;
+          lamps.push({ material: lamp, systemId });
+        }
+      } else {
+        box(bay, .96, .66, .065, 0, .045, .23, materials.dark).name = 'annunciator-housing';
+        for (let row = 0; row < 3; row++) for (let col = 0; col < 4; col++) {
+          const systemId = (['power', 'flow', 'indicators'] as const)[row];
+          const lamp = new THREE.MeshStandardMaterial({ color: '#6eac98', emissive: '#6eac98', emissiveIntensity: .2 });
+          const tile = box(bay, .18, .11, .018, (col - 1.5) * .22, .23 - row * .19, .275, lamp);
+          tile.name = 'wall-annunciator-tile'; tile.userData.systemId = systemId;
+          lamps.push({ material: lamp, systemId });
+        }
+      }
+      box(bay, 1.14, .035, .09, 0, -.55, .2, materials.metal);
+    }
+  }
+
   for (const sector of layout.sectors) {
     const module = new THREE.Group(); module.position.set(sector.x, 0, sector.z); module.rotation.y = sector.yaw;
     module.userData.zone = sector.id; root.add(module);
@@ -124,6 +218,8 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
     for (const x of [-w / 2 + .023, w / 2 - .023]) box(panel, .035, panelH, .025, x, panelH / 2, .1, materials.dark);
     const selection = materials.accent.clone(); selections.set(sector.id, selection);
     box(panel, w - .2, .034, .015, 0, panelH - .105, .117, selection);
+    labelPlate(panel, ({ power: '01 · МОЩНОСТЬ', systems: '02 · СИСТЕМЫ', alarms: '03 · СИГНАЛЫ' })[sector.id],
+      0, panelH + .035, .125, w - .18, .12);
     for (const x of [-w * .43, w * .43]) for (const y of [.12, panelH - .19]) screw(panel, x, y, .118);
 
     const [primary, secondary] = ZONE_READINGS[sector.id];
@@ -146,8 +242,16 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
       round(panel, .047, .025, x, panelH - .25, .13, materials.dark);
       const lamp = new THREE.MeshStandardMaterial({ color: '#77a499', emissive: '#77a499', emissiveIntensity: .22, roughness: .4 });
       round(panel, .03, .024, x, panelH - .25, .15, lamp, 18);
-      lamps.push({ material: lamp, zone: sector.id });
+      lamps.push({ material: lamp, systemId: sector.id === 'power' ? 'power' : sector.id === 'systems' ? 'flow' : 'indicators' });
     }
+    const systemId = sector.id === 'power' ? 'power' : sector.id === 'systems' ? 'flow' : 'indicators';
+    round(panel, .075, .015, w * .34, .26, .13, materials.dark, 24);
+    const statusMaterial = new THREE.MeshStandardMaterial({ color: '#6eac98', emissive: '#6eac98', emissiveIntensity: .2, roughness: .4 });
+    const statusLamp = round(panel, .052, .019, w * .34, .26, .151, statusMaterial, 24);
+    statusLamp.name = 'system-status-lamp'; statusLamp.userData.systemId = systemId;
+    lamps.push({ material: statusMaterial, systemId });
+    labelPlate(panel, ({ power: 'КАНАЛ', flow: 'КОНТУР', indicators: 'ПАРА' })[systemId],
+      w * .34, .14, .155, .32, .08);
 
     // A solid wedge joins the upright enclosure and desktop; its top follows the desk pitch.
     box(module, w - .08, .22, .28, 0, 1.1, -.46, materials.body);
@@ -190,6 +294,33 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
     }
     box(panel, w * .7, .008, .004, 0, .075, .114, materials.dark);
     for (const x of [-w * .3, 0, w * .3]) round(panel, .022, .008, x, .075, .119, materials.metal, 12);
+  }
+
+  // Front operator workstations sit at the side of the main control sightline.
+  // Their own screens repeat live values; no static mock readings are shown.
+  for (const side of [-1, 1]) {
+    const station = new THREE.Group(); station.name = 'operator-workstation';
+    station.position.set(side * (compact ? 2.7 : 4.08), 0, 1.13); root.add(station); subjects.push(station);
+    const width = compact ? 1.12 : 1.3;
+    box(station, width, .095, .73, 0, .79, 0, materials.desk).name = 'workstation-desk';
+    for (const sx of [-width * .42, width * .42]) {
+      box(station, .09, .69, .58, sx, .405, -.035, materials.body).name = 'workstation-support';
+      box(station, .14, .055, .64, sx, .04, -.035, materials.dark).name = 'workstation-foot';
+    }
+    box(station, width - .18, .035, .65, 0, .43, -.03, materials.metal).name = 'cable-tray';
+    for (let i = 0; i < (compact ? 2 : 1); i++) {
+      const x = compact ? (i - .5) * .56 : 0;
+      box(station, .09, .21, .07, x, .96, -.18, materials.metal).name = 'monitor-stand';
+      liveScreen(station, 'operator-screen', i ? 'flow' : 'power', compact ? 'ПОСТ СМР' : 'ПОСТ ВВЭР',
+        x, 1.16, -.15, compact ? .5 : .75, .43);
+    }
+    box(station, .52, .025, .16, 0, .865, .22, materials.dark).name = 'operator-keyboard';
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 2; j++)
+      box(station, .048, .013, .035, (i - 2.5) * .075, .884, .19 + j * .055, materials.ivory);
+    if (!compact) {
+      box(station, .22, .035, .13, -width * .32, .865, .26, materials.ivory).name = 'procedure-binder';
+      round(station, .06, .034, width * .33, .85, .21, materials.dark, 16).name = 'desk-telephone';
+    }
   }
 
   // Ergonomic chair in front of the centre desk; five spokes, wheels and arm mounts.
@@ -250,15 +381,27 @@ export function buildRoom(profile: Profile, assetBase: string, invalidate: () =>
         material.emissiveIntensity = zone === selected ? .65 : 0;
       }
       for (const lamp of lamps) {
-        const active = lamp.zone === 'alarms' || snapshot.signal.kind === 'normal';
-        const color = !active ? '#506762' : snapshot.signal.kind === 'alarm' ? '#ea694e' : snapshot.signal.kind === 'warning' ? '#e5ae4e' : '#6eac98';
+        const status = snapshot.systems.find(system => system.id === lamp.systemId)?.status ?? 'normal';
+        const color = status === 'alarm' ? '#ea694e' : status === 'warning' ? '#e5ae4e' : '#6eac98';
         lamp.material.color.set(color); lamp.material.emissive.set(color);
-        lamp.material.emissiveIntensity = active ? snapshot.signal.acknowledged ? .28 : .65 : .08;
+        lamp.material.emissiveIntensity = status === 'normal' ? .17 : snapshot.signal.acknowledged ? .28 : .65;
       }
       for (const { context, texture, key } of displays) {
         context.fillStyle = '#12282b'; context.fillRect(0, 0, 256, 80);
         context.fillStyle = '#b5d8cb'; context.font = '52px monospace'; context.textAlign = 'center';
         context.fillText(String(snapshot.readings[key]).padStart(2, '0'), 128, 58); texture.needsUpdate = true;
+      }
+      for (const { context, texture, key, caption } of auxiliaryDisplays) {
+        if (!context) continue;
+        context.fillStyle = '#101c2b'; context.fillRect(0, 0, 512, 320);
+        context.fillStyle = '#1d3850'; context.fillRect(24, 66, 464, 2);
+        context.fillRect(24, 255, 464, 2);
+        context.fillStyle = '#a9d2dc'; context.font = 'bold 31px Arial'; context.textAlign = 'left';
+        context.fillText(caption, 29, 47);
+        context.font = 'bold 116px monospace'; context.textAlign = 'center';
+        context.fillText(String(snapshot.readings[key]).padStart(2, '0'), 256, 200);
+        context.font = '24px Arial'; context.fillText('УСЛОВНАЯ ШКАЛА', 256, 291);
+        texture.needsUpdate = true;
       }
     },
     tick(delta: number) {

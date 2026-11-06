@@ -24,13 +24,17 @@ function required(file) {
 const expected = [
   'package.json', 'package-lock.json', 'index.html', 'vite.config.ts',
   'src/main.tsx', 'src/app/App.tsx', 'src/app/routing.ts', 'src/app/storage.ts',
+  'src/app/migrateSession.ts', 'src/app/sessionValidation.ts', 'src/app/group/index.ts',
   'src/app/content.ts', 'src/app/components.tsx', 'src/sim/model.ts',
+  'src/sim/assessment.ts', 'src/sim/stages.ts',
   'src/scene/ControlRoom.tsx', 'src/scene/buildRoom.ts', 'src/scene/config.ts',
   'src/scene/motion.ts', 'src/figure/ModuleFigure.tsx',
   'src/styles/app.css', 'src/styles/tokens.css',
-  'tests/sim/model.test.ts', 'tests/app/routing.test.ts', 'tests/app/storage.test.ts',
+  'tests/sim/model.test.ts', 'tests/sim/assessment.test.ts', 'tests/app/routing.test.ts', 'tests/app/storage.test.ts', 'tests/group/groupSession.test.ts',
   'tests/scene/scene.test.ts', 'tests/figure/ModuleFigure.test.tsx',
   'README.md', 'COVERAGE.md', 'TASKS.md', 'docs/original_specification.txt',
+  'docs/references.md', 'docs/user-guide.md', 'docs/technical-description.md',
+  'docs/demo-runbook.md', 'docs/delivery-register.md',
   'anatomy_bshu_prompt_visual_v2.md', 'docs/visual-direction.md',
   'cad/generate_parts.py', 'cad/parts-list.md', 'public/assets/cad/manifest.json',
   '.github/workflows/pages.yml',
@@ -63,10 +67,12 @@ check('Coverage IDs and statuses', () => {
     const id = `ТЗ-${String(n).padStart(2, '0')}`;
     const matching = rows.filter((line) => line.startsWith(`| ${id} |`));
     assert(matching.length === 1, `expected exactly one row ${id}`);
-    assert(/\*\*(Реализовано|Частично|Следующий этап)/.test(matching[0]), `${id}: missing explicit status`);
+    assert(/\*\*(Реализовано|Частично|Не выполнено|Исключено пользователем)/.test(matching[0]), `${id}: missing explicit status`);
     assert(/\]\([^)]+\)/.test(matching[0]), `${id}: missing evidence link`);
   }
-  assert(rows[10].includes('отложено') && rows[11].includes('отложено'), 'VR requirements must stay deferred');
+  for (const number of [11, 12, 17, 21, 22, 23, 24, 25]) {
+    assert(rows[number - 1].includes('Исключено пользователем'), `ТЗ-${number}: VR exclusion must be explicit`);
+  }
   assert(rows[29].includes('45 календарных дней'), 'supply deadline must be retained');
 });
 for (const doc of ['README.md', 'COVERAGE.md']) check(`Local links in ${doc}`, () => {
@@ -80,7 +86,7 @@ for (const doc of ['README.md', 'COVERAGE.md']) check(`Local links in ${doc}`, (
 check('Safety and documentation', () => {
   assert(read('src/app/content.ts').includes('Учебный прототип · условные данные · не для управления АЭС'), 'missing permanent disclaimer text');
   const readme = read('README.md');
-  for (const text of ['localStorage', 'npm ci', 'npm run dev', '--check', 'build123d==0.13.0', '/TVTest1/', 'GitHub Actions']) {
+  for (const text of ['localStorage', 'sessionStorage', 'npm ci', 'npm run dev', '--check', 'build123d==0.13.0', '/TVTest1/', 'GitHub Actions']) {
     assert(readme.includes(text), `README missing ${text}`);
   }
 });

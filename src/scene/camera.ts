@@ -1,7 +1,20 @@
-import { Mesh, Object3D, OrthographicCamera, Vector3 } from 'three';
+import { Box3, Mesh, Object3D, OrthographicCamera, Vector3 } from 'three';
+
+export interface ConsoleView {
+  focus?: Object3D;
+  zoom?: number;
+  panX?: number;
+  panY?: number;
+  padding?: number;
+}
+
+/** Keep every upper panel and the operator row visible in the page overview. */
+export function frameOverview(camera: OrthographicCamera, subjects: readonly Object3D[], aspect: number) {
+  frameConsole(camera, subjects, aspect, { padding: 1.16 });
+}
 
 /** Fit the physical console and chair in the fixed camera plane, excluding the floor platform. */
-export function frameConsole(camera: OrthographicCamera, subjects: readonly Object3D[], aspect: number) {
+export function frameConsole(camera: OrthographicCamera, subjects: readonly Object3D[], aspect: number, view: ConsoleView = {}) {
   camera.updateMatrixWorld(true);
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const point = new Vector3();
@@ -19,8 +32,15 @@ export function frameConsole(camera: OrthographicCamera, subjects: readonly Obje
     });
   }
   if (!Number.isFinite(minX)) return;
-  const height = Math.max(maxY - minY, (maxX - minX) / aspect) * 1.1;
-  const centerX = (minX + maxX) / 2, centerY = (minY + maxY) / 2;
+  const zoom = Math.min(5, Math.max(1, view.zoom ?? 1));
+  const height = Math.max(maxY - minY, (maxX - minX) / aspect) * (view.padding ?? 1.1) / zoom;
+  let centerX = (minX + maxX) / 2, centerY = (minY + maxY) / 2;
+  if (view.focus) {
+    const focusPoint = new Box3().setFromObject(view.focus).getCenter(new Vector3()).applyMatrix4(camera.matrixWorldInverse);
+    centerX = focusPoint.x; centerY = focusPoint.y;
+  }
+  centerX += Math.min(1, Math.max(-1, view.panX ?? 0)) * height * aspect;
+  centerY += Math.min(1, Math.max(-1, view.panY ?? 0)) * height;
   camera.left = centerX - height * aspect / 2; camera.right = centerX + height * aspect / 2;
   camera.top = centerY + height / 2; camera.bottom = centerY - height / 2;
   camera.updateProjectionMatrix();

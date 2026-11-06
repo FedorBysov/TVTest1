@@ -14,10 +14,6 @@ export const CAD_ASSETS = [
 export type CadId = typeof CAD_ASSETS[number]['id'];
 export type MotionPose = { knob: number; needle: number; button: number };
 
-export function cameraViewHeight(aspect: number, roomWidth: number) {
-  return Math.max(4.4, (roomWidth + 1.3) / aspect);
-}
-
 export function motionPose(command: number, reading: number, acknowledged: boolean): MotionPose {
   const bounded = (n: number) => Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0)) / 100;
   return {
@@ -29,7 +25,9 @@ export function motionPose(command: number, reading: number, acknowledged: boole
 
 export function consoleLayout(profile: Profile) {
   const compact = profile === 'smr';
-  const width = compact ? 5.35 : 7.0;
+  // The physical lessons use distinct rooms: a long hybrid instrument wall
+  // for VVER and a tighter screen-led workstation for SMR.
+  const width = compact ? 6.1 : 9.4;
   const ids: ZoneId[] = ['power', 'systems', 'alarms'];
   return {
     width,

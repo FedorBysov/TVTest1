@@ -43,7 +43,18 @@ export function Readings({ snapshot, compact = false }: { snapshot: DisplaySnaps
       <span>Системы</span>
       <strong>{snapshot.systems.filter((item) => item.status === 'normal').length}/{snapshot.systems.length} в норме</strong>
     </div>
+    {!compact && <SystemsStatus snapshot={snapshot} />}
   </div>
+}
+
+export function SystemsStatus({ snapshot }: { snapshot: DisplaySnapshot }) {
+  const symbols = { normal: '●', warning: '▲', alarm: '⬣' } as const
+  const names = { normal: 'Норма', warning: 'Предупреждение', alarm: 'Тревога' } as const
+  return <ul className="systems-status" aria-label="Состояние учебных систем">
+    {snapshot.systems.map((system) => <li key={system.id} className={`system-status-${system.status}`}>
+      <span aria-hidden="true">{symbols[system.status]}</span><strong>{system.label}</strong><small>{names[system.status]}</small>
+    </li>)}
+  </ul>
 }
 
 export function StageStrip({ stage, onStage, compact = false }: { stage: StageId; onStage?: (stage: StageId) => void; compact?: boolean }) {

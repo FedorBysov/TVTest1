@@ -13,7 +13,7 @@ export const WINDOW: k.Plan = { x: -124, y: 40, w: 103, d: 35, r: 3 };
 const S = k.solidSvg, L = k.lineSvg;
 export type FigurePart = { id: string; mount: string; purpose: string };
 type Geometry = { staticMarkup: string; frontMarkup: string; buttonMarkup: string; stemMarkup: string; parts: FigurePart[] };
-const cache = new Map<Profile, Geometry>();
+const cache = new Map<string, Geometry>();
 const bounded = (n: number) => Math.min(100, Math.max(0, Number.isFinite(n) ? n : 0));
 
 export function figureReading(snapshot: DisplaySnapshot, zone: ZoneId) {
@@ -48,8 +48,9 @@ export const buttonShift = (press: number) => k.translateAlong(P, [0, 0, -4 * pr
 export const windowPath = k.planOutline(k.insetPlan(WINDOW, 7), 30.5, P);
 export const windowMatrix = k.topMatrix([WINDOW.x + WINDOW.w / 2, WINDOW.y + WINDOW.d / 2 + 7], 30.6, P);
 
-export function moduleGeometry(profile: Profile): Geometry {
-  const cached = cache.get(profile); if (cached) return cached;
+export function moduleGeometry(profile: Profile, zone: ZoneId = 'power'): Geometry {
+  const cacheKey = `${profile}:${zone}`;
+  const cached = cache.get(cacheKey); if (cached) return cached;
   const parts: FigurePart[] = [], base: string[] = [], assemblies: { depth: number; markup: string }[] = [];
   const add = (out: string[], id: string, mount: string, purpose: string, markup: string) => {
     parts.push({ id, mount, purpose }); out.push(`<g data-part="${id}">${markup}</g>`);
@@ -77,6 +78,25 @@ export function moduleGeometry(profile: Profile): Geometry {
     const rail = { x: profile === 'smr' ? 113 : 119, y, w: profile === 'smr' ? 29 : 22, d: 5, r: 1 };
     add(base, `service-rail-${y}`, 'faceplate', 'Removable service bracket', S(k.slabOf(rail, 28, profile === 'smr' ? 4 : 2, P, 4, .4), { tone: 'mid' }));
     screw(base, `service-fastener-${y}`, rail.x + 5, y + 2.5, profile === 'smr' ? 32 : 30, `service-rail-${y}`);
+  }
+  // A replaceable daughter plate distinguishes the three teaching zones.
+  // Its mount clears the gauge, grip, signal lamp and pushbutton guards.
+  const zonePlate = { x: 107, y: 12, w: 40, d: 31, r: 2 };
+  add(base, `zone-${zone}-plate`, 'faceplate', 'Zone-specific screwed daughter plate',
+    S(k.slabOf(zonePlate, 28.2, 2.5, P, 4, .4), { tone: 'mid' }));
+  if (zone === 'power') {
+    const bars = Array.from({ length: 5 }, (_, i) =>
+      S(k.slabOf({ x: 111 + i * 7, y: 19, w: 3, d: 17 - Math.abs(2 - i) * 3, r: .6 }, 30.8, 1.1, P, 3), { tone: 'hi' }));
+    add(base, 'zone-power-scale', 'zone-power-plate', 'Five raised scale bars for the power lesson', bars.join(''));
+  } else if (zone === 'systems') {
+    const channels = [18, 27, 36].map(y => L(k.lineOnTop([111, y], [143, y], 31, P), { tone: 'hi' })).join('');
+    const fittings = [18, 27, 36].map(y => S(k.cylinder(138, y, 2.8, 30.8, 1.7, P, 24), { tone: 'hi' })).join('');
+    add(base, 'zone-systems-manifold', 'zone-systems-plate', 'Three channel manifold for the systems lesson', channels + fittings);
+  } else {
+    const seats = [115, 127, 139].map(x =>
+      S(k.cylinder(x, 27, 4.7, 30.8, 2, P, 32), { tone: 'lo' }) +
+      `<path class="module-zone-alarm-lens" d="${k.ring(x, 27, 3.4, 33, P, 32)}"/>`);
+    add(base, 'zone-alarms-bank', 'zone-alarms-plate', 'Three seated annunciator lenses for the alarm lesson', seats.join(''));
   }
 
   const gauge: string[] = [], { x: gx, y: gy, r: gr, z: gz } = GAUGE;
@@ -128,5 +148,5 @@ export function moduleGeometry(profile: Profile): Geometry {
   add(lamp, 'signal-ring', 'signal-bezel', 'Lens retaining ring', L(k.ring(lx, ly, 11.4, 37.2, P, 80), { tone: 'mid' }));
   assembly(lx, ly, lamp);
   const result = { staticMarkup: base.join('') + assemblies.sort((a, b) => a.depth - b.depth).map(a => a.markup).join(''), frontMarkup: front.join(''), buttonMarkup: cap.join(''), stemMarkup: stem.join(''), parts };
-  cache.set(profile, result); return result;
+  cache.set(cacheKey, result); return result;
 }

@@ -72,7 +72,7 @@ describe('учебное занятие', () => {
     expect(samples).toHaveLength(60);
     expect(samples.at(-1)).toMatchObject({ time: 10800, snapshot: deriveSnapshot(state) });
     expect(samples[1].time - samples[0].time).toBe(10);
-    expect(state.journal.map(({ id }) => id)).toEqual([1, 2, ...Array.from({ length: 60 }, (_, index) => 1023 + index)]);
+    expect(state.journal.map(({ id }) => id)).toEqual([1, 2, ...Array.from({ length: 60 }, (_, index) => 1024 + index)]);
     expect(JSON.stringify(state).length).toBeLessThan(100_000);
   });
 
