@@ -22,5 +22,5 @@ Scope: воспроизводимое короткое русскоязычно�
   EXPECT: INTEGRATION_OK
   EVIDENCE: automatic-evidence=v1; definition-sha256=0990bf99c59c13cdfad9b4d2ccec2cf849244a2a1ebe4d580054de026fefa888; exit=0; EXPECT=matched; output-sha256=1a4d7f338f8f10041b2b6aa09aeeb774e22fd903415d82341a8cda6405bcaff7; output-bytes=53; shell=/bin/sh; cwd=/Users/byssov/Desktop/TVTest1; path=5bde1bdd0bf8/37 entries
 
-- [ ] G5: репозиторий и GitHub Pages содержат и воспроизводят финальный ролик
-  EVIDENCE: pending
+- [x] G5: репозиторий и GitHub Pages содержат и воспроизводят финальный ролик
+  EVIDENCE: GitHub Actions run 42205709666 для коммита c641e35 завершился success; на https://fedorbysov.github.io/TVTest1/ MP4, VTT и JPEG возвращают HTTP 200, Chrome воспроизвёл 1,9 с видео 1600×900 с 16 русскими cue и без ошибок страницы.
