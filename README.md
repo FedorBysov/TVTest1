@@ -81,9 +81,9 @@ python3.13 -m venv .venv
 
 ## GitHub Pages
 
-[Workflow](.github/workflows/pages.yml) запускается при push в `main` или вручную: устанавливает зависимости, проверяет структуру, запускает тесты, собирает и публикует `dist/`. В **Settings → Pages → Source** выберите **GitHub Actions**. Базовый путь — `/TVTest1/`; при переименовании репозитория измените его в [vite.config.ts](vite.config.ts) и verifier.
+[Открыть опубликованный прототип](https://fedorbysov.github.io/TVTest1/). Кнопка **«Развернуть стол»** находится на странице обзора.
 
-Адрес публикации появляется в результате job `deploy` после успешного запуска. Наличие workflow не подтверждает публикацию сайта. Конфигурация основана на [официальном примере GitHub Actions](https://github.com/actions/starter-workflows/blob/main/pages/static.yml).
+[Workflow](.github/workflows/pages.yml) запускается при push в `main` или вручную: устанавливает зависимости, проверяет структуру, запускает тесты, собирает и публикует `dist/`. В **Settings → Pages → Source** уже выбран **GitHub Actions**. Базовый путь — `/TVTest1/`; при переименовании репозитория измените его в [vite.config.ts](vite.config.ts) и verifier. [Первое развёртывание](https://github.com/FedorBysov/TVTest1/actions/runs/42141509102) прошло успешно: 59 тестов, сборка и публикация. На живом сайте проверены расширенный стол, переключение этапа и три CAD-ресурса. Конфигурация основана на [официальном примере GitHub Actions](https://github.com/actions/starter-workflows/blob/main/pages/static.yml).
 
 ## Требования и исходники
 
