@@ -27,6 +27,8 @@ npm run preview
 
 ## Страницы и демонстрация
 
+На странице обзора размещён [короткий видеообзор с русской озвучкой и субтитрами](https://fedorbysov.github.io/TVTest1/#/overview). [Открыть MP4 отдельно](https://fedorbysov.github.io/TVTest1/media/tvtest1-demo.mp4). Ролик показывает реальные действия в опубликованном интерфейсе: 3D-стол, оба профиля, сценарий расхода, журнал и оценку. Компоновка и данные в кадре учебные.
+
 Hash-маршруты не требуют серверных перенаправлений:
 
 | Адрес после `/TVTest1/` | Содержание |
@@ -84,6 +86,8 @@ python3.13 -m venv .venv
 [Открыть сайт](https://fedorbysov.github.io/TVTest1/). Кнопка **«Развернуть стол»** находится на странице обзора. Перед демонстрацией последней версии проверьте успешную публикацию соответствующего коммита в GitHub Actions.
 
 [Workflow](.github/workflows/pages.yml) запускается при push в `main` или вручную: устанавливает зависимости, проверяет структуру, запускает тесты, собирает и публикует `dist/`. Источник GitHub Pages — **GitHub Actions**. Базовый путь — `/TVTest1/`; при переименовании репозитория измените его в [vite.config.ts](vite.config.ts) и verifier. Конфигурация основана на [официальном примере GitHub Actions](https://github.com/actions/starter-workflows/blob/main/pages/static.yml).
+
+Исходники видео находятся в [docs/demo-video](docs/demo-video/README.md): текст закадровой озвучки, план сцен и титры. [Скрипт записи](scripts/demo/capture.mjs) использует локальный Chrome, `playwright-core` и опубликованный сайт; [озвучка](scripts/demo/speak.mjs) создаётся русским системным голосом Milena; [монтаж](scripts/demo/render.mjs) выполняется FFmpeg с переходами, титрами и AAC-дорожкой. Рабочие WebM/AIFF хранятся только в `.cache/demo/`. Для повторения на macOS нужны Chrome, голос Milena и FFmpeg 8.x; пути к ним можно задать переменными `DEMO_CHROME` и `DEMO_FFMPEG`. Сначала выполните `npx playwright-core install ffmpeg` с `PLAYWRIGHT_BROWSERS_PATH=.cache/ms-playwright`, затем по порядку `node scripts/demo/speak.mjs`, `node scripts/demo/capture.mjs`, `node scripts/demo/render.mjs`, `node scripts/demo/verify.mjs media`. Готовый MP4, обложка и VTT находятся в `public/media/` и публикуются вместе с сайтом.
 
 ## Требования и исходники
 

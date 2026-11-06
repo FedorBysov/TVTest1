@@ -18,6 +18,7 @@ interface OverviewProps {
 }
 
 export function OverviewPage({ snapshot, profile, selectedZone, onZone, onSelectExpandedZone, onCommand, onAcknowledge, onStage, onOpenScenarios, canDispatch }: OverviewProps) {
+  const mediaBase = `${import.meta.env.BASE_URL}media/`
   const [expanded, setExpanded] = useState(false)
   const dialogRef = useRef<HTMLDialogElement>(null)
   const expandButtonRef = useRef<HTMLButtonElement>(null)
@@ -73,6 +74,23 @@ export function OverviewPage({ snapshot, profile, selectedZone, onZone, onSelect
         <strong>{ZONES[zone].title}</strong><small>{ZONES[zone].short}</small>
       </button>)}
     </div>
+
+    <Panel className="demo-panel">
+      <div className="panel-heading"><span className="panel-index">FIG 03 / ВИДЕООБЗОР</span><span className="tiny-tag">С ОЗВУЧКОЙ И СУБТИТРАМИ</span></div>
+      <div className="demo-grid">
+        <video className="demo-video" controls playsInline preload="metadata" poster={`${mediaBase}tvtest1-demo-poster.jpg`} aria-label="Видеообзор возможностей TVTest1 на русском языке">
+          <source src={`${mediaBase}tvtest1-demo.mp4`} type="video/mp4" />
+          <track kind="captions" src={`${mediaBase}tvtest1-demo.ru.vtt`} srcLang="ru" label="Русский" default />
+          Ваш браузер не поддерживает встроенное видео. <a href={`${mediaBase}tvtest1-demo.mp4`}>Открыть ролик</a>.
+        </video>
+        <div className="demo-description">
+          <span className="eyebrow">КАК РАБОТАЕТ TVTEST1</span>
+          <h2>От общего вида до разбора действий</h2>
+          <p>Короткая демонстрация показывает, как осмотреть и развернуть 3D-щит, работать с условными органами управления, ввести учебное отклонение и проверить результат в журнале.</p>
+          <p className="demo-disclaimer">Компоновка, показания и сценарии вымышлены для прототипа.</p>
+        </div>
+      </div>
+    </Panel>
 
     {expanded && <dialog ref={dialogRef} className="workbench-dialog" aria-label="Расширенный учебный стол">
       <div className="workbench-shell">
